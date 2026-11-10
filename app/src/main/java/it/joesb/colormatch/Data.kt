@@ -64,16 +64,107 @@ data class AppData(
     }
 }
 
-/** Salvataggio locale in un file JSON nella memoria dell'app. */
+/** Una verifica registrata nello storico (copia i dati del campione, così resta valida anche se il campione cambia). */
+data class Check(
+    val id: String,
+    val time: Long,
+    val lot: String,
+    val buttonType: String,
+    val material: String,
+    val color: String,
+    val refLab: Lab,
+    val lab: Lab,
+    val deltaE: Double,
+    val threshold: Double,
+    val ok: Boolean,
+)
+
+/** Indicazioni leggibili sulla differenza tra pezzo e campione. */
+fun differenceHints(ref: Lab, piece: Lab): List<String> = buildList {
+    val dl = piece.l - ref.l
+    val da = piece.a - ref.a
+    val db = piece.b - ref.b
+    if (kotlin.math.abs(dl) >= 0.5) add(if (dl > 0) "più chiaro" else "più scuro")
+    if (kotlin.math.abs(da) >= 0.5) add(if (da > 0) "tende al rosso" else "tende al verde")
+    if (kotlin.math.abs(db) >= 0.5) add(if (db > 0) "tende al giallo" else "tende al blu")
+}
+
+/** Salvataggio locale in file JSON nella memoria dell'app. */
 class Store(context: Context) {
     private val file = File(context.filesDir, "colormatch.json")
+    private val historyFile = File(context.filesDir, "history.json")
 
     var data by mutableStateOf(load())
+        private set
+
+    /** Storico verifiche, dalla più recente. */
+    var history by mutableStateOf(loadHistory())
         private set
 
     fun update(change: (AppData) -> AppData) {
         data = change(data)
         save(data)
+    }
+
+    fun addCheck(c: Check) {
+        history = listOf(c) + history
+        saveHistory()
+    }
+
+    fun deleteChecks(ids: Set<String>) {
+        history = history.filterNot { it.id in ids }
+        saveHistory()
+    }
+
+    private fun writeAtomic(target: File, text: String) {
+        try {
+            val tmp = File(target.parentFile, target.name + ".tmp")
+            tmp.writeText(text)
+            if (!tmp.renameTo(target)) {
+                target.writeText(text)
+                tmp.delete()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun saveHistory() {
+        val arr = JSONArray()
+        history.forEach { c ->
+            arr.put(
+                JSONObject()
+                    .put("id", c.id).put("time", c.time).put("lot", c.lot)
+                    .put("buttonType", c.buttonType).put("material", c.material).put("color", c.color)
+                    .put("rL", c.refLab.l).put("ra", c.refLab.a).put("rb", c.refLab.b)
+                    .put("L", c.lab.l).put("a", c.lab.a).put("b", c.lab.b)
+                    .put("deltaE", c.deltaE).put("threshold", c.threshold).put("ok", c.ok)
+            )
+        }
+        writeAtomic(historyFile, arr.toString())
+    }
+
+    private fun loadHistory(): List<Check> = try {
+        if (!historyFile.exists()) emptyList() else {
+            val arr = JSONArray(historyFile.readText())
+            (0 until arr.length()).map {
+                val o = arr.getJSONObject(it)
+                Check(
+                    id = o.getString("id"),
+                    time = o.getLong("time"),
+                    lot = o.optString("lot", ""),
+                    buttonType = o.getString("buttonType"),
+                    material = o.getString("material"),
+                    color = o.getString("color"),
+                    refLab = Lab(o.getDouble("rL"), o.getDouble("ra"), o.getDouble("rb")),
+                    lab = Lab(o.getDouble("L"), o.getDouble("a"), o.getDouble("b")),
+                    deltaE = o.getDouble("deltaE"),
+                    threshold = o.getDouble("threshold"),
+                    ok = o.getBoolean("ok"),
+                )
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 
     private fun load(): AppData = try {
@@ -83,15 +174,7 @@ class Store(context: Context) {
     }
 
     private fun save(d: AppData) {
-        try {
-            val tmp = File(file.parentFile, file.name + ".tmp")
-            tmp.writeText(toJson(d).toString())
-            if (!tmp.renameTo(file)) {
-                file.writeText(tmp.readText())
-                tmp.delete()
-            }
-        } catch (_: Exception) {
-        }
+        writeAtomic(file, toJson(d).toString())
     }
 
     private fun toJson(d: AppData): JSONObject {

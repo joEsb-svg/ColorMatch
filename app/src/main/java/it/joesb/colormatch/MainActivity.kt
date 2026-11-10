@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 
-enum class Screen { Home, Verify, Refs, NewRef, Settings, Calibrate }
+enum class Screen { Home, Verify, History, Refs, NewRef, Settings, Calibrate }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +39,7 @@ fun App(store: Store) {
     when (stack.last()) {
         Screen.Home -> HomeScreen(store, go)
         Screen.Verify -> VerifyScreen(store, back, go)
+        Screen.History -> HistoryScreen(store, back)
         Screen.Refs -> RefsScreen(store, back, go)
         Screen.NewRef -> NewRefScreen(store, back, go)
         Screen.Settings -> SettingsScreen(store, back, go)

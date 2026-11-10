@@ -71,6 +71,8 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
                 }
             }
             BigAction("Verifica pezzo", "Scegli tasto, materiale e colore e controlla se è conforme") { go(Screen.Verify) }
+            val today = store.history.count { isSameDay(it.time, System.currentTimeMillis()) }
+            BigAction("Storico verifiche", "${store.history.size} verifiche · $today oggi · esporta in Excel o PDF") { go(Screen.History) }
             BigAction("Campioni di riferimento", "${data.refs.size} campioni salvati") { go(Screen.Refs) }
             BigAction("Impostazioni", "Cabina, materiali e soglie ΔE, tipi di tasto") { go(Screen.Settings) }
         }
@@ -102,6 +104,7 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     var refId by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<Measurement?>(null) }
     var failed by remember { mutableStateOf(false) }
+    var lot by remember { mutableStateOf("") }
     val controller = remember { MeasureController() }
 
     val refs = data.refs
@@ -146,9 +149,35 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                         CameraPanel(controller, CamMode.PROFILE, data.profile)
                         ExposureStatus(controller)
                         LiveReadout(controller)
+                        OutlinedTextField(
+                            value = lot,
+                            onValueChange = { lot = it },
+                            label = { Text("Lotto / ordine (facoltativo)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                         MeasureButton(controller) { m ->
                             result = m
                             failed = m == null
+                            if (m != null) {
+                                val threshold = data.thresholdFor(ref.material)
+                                val de = ColorMath.deltaE2000(ref.lab, m.lab)
+                                store.addCheck(
+                                    Check(
+                                        id = UUID.randomUUID().toString(),
+                                        time = System.currentTimeMillis(),
+                                        lot = lot.trim(),
+                                        buttonType = ref.buttonType,
+                                        material = ref.material,
+                                        color = ref.color,
+                                        refLab = ref.lab,
+                                        lab = m.lab,
+                                        deltaE = de,
+                                        threshold = threshold,
+                                        ok = de <= threshold,
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -196,14 +225,7 @@ private fun ResultCard(ref: Reference, m: Measurement, threshold: Double) {
                     Text("Pezzo", color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
             }
-            val hints = buildList {
-                val dl = m.lab.l - ref.lab.l
-                val da = m.lab.a - ref.lab.a
-                val db = m.lab.b - ref.lab.b
-                if (abs(dl) >= 0.5) add(if (dl > 0) "più chiaro" else "più scuro")
-                if (abs(da) >= 0.5) add(if (da > 0) "tende al rosso" else "tende al verde")
-                if (abs(db) >= 0.5) add(if (db > 0) "tende al giallo" else "tende al blu")
-            }
+            val hints = differenceHints(ref.lab, m.lab)
             if (hints.isNotEmpty()) {
                 Text("Il pezzo è " + hints.joinToString(", "), color = Color.White, textAlign = TextAlign.Center)
             }
@@ -215,6 +237,7 @@ private fun ResultCard(ref: Reference, m: Measurement, threshold: Double) {
             if (warn.isNotEmpty()) {
                 Text("⚠ " + warn.joinToString("; "), color = Color.White, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
             }
+            Text("Salvata nello storico", color = Color(0xCCFFFFFF), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
