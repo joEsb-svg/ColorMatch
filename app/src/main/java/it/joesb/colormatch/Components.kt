@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -155,9 +156,11 @@ fun InfoCard(text: String, color: Color = Color(0xCC111A27), content: @Composabl
     Column(
         Modifier
             .fillMaxWidth()
+            .ledGlow(18.dp, if (warn) WarnAmber else Cyan, if (warn) 0.5f else 0.72f)
             .clip(shape)
-            .background(color)
-            .border(1.dp, if (warn) WarnAmber.copy(alpha = 0.45f) else Line, shape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF18222F), Color(0xFF0F1722))))
+            .background(if (warn) color else Color.Transparent)
+            .border(1.dp, if (warn) Brush.verticalGradient(0f to WarnAmber.copy(alpha = 0.85f), 1f to WarnAmber.copy(alpha = 0.25f)) else BevelBrush, shape)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {

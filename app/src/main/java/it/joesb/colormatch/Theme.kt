@@ -22,6 +22,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -137,11 +141,66 @@ fun TechBackground(content: @Composable BoxScope.() -> Unit) {
     }
 }
 
-/** Modificatore "pannello": fondo scuro semitrasparente con bordo sottile. */
-fun Modifier.panel(radius: Dp = 18.dp, fill: Color = Color(0xCC111A27)): Modifier =
-    this.clip(RoundedCornerShape(radius))
-        .background(fill)
-        .border(1.dp, Line, RoundedCornerShape(radius))
+/** Bordo "in rilievo": filo di luce in alto, ombra in basso. */
+val BevelBrush = Brush.verticalGradient(
+    0f to Color(0x70FFFFFF),
+    0.35f to Color(0x16FFFFFF),
+    1f to Color(0x99000000),
+)
+
+/**
+ * Luce LED sotto un riquadro, come un'insegna retroilluminata: alone sfocato che esce dal bordo
+ * inferiore e una linea luminosa sottile appena sotto. Va messo PRIMA di clip/background.
+ */
+fun Modifier.ledGlow(radius: Dp, color: Color = Cyan, strength: Float = 0.72f): Modifier = drawWithCache {
+    val blur = 16.dp.toPx()
+    val glowPaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        this.color = color.copy(alpha = strength).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(blur, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val shadowPaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        this.color = Color(0xB3000000).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(4.dp.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val linePaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        maskFilter = android.graphics.BlurMaskFilter(1.2.dp.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val r = radius.toPx()
+    onDrawBehind {
+        val w = size.width
+        val h = size.height
+        drawIntoCanvas { c ->
+            val n = c.nativeCanvas
+            // alone: più stretto del riquadro e spostato in basso, così la luce esce solo da sotto
+            val inset = w * 0.07f
+            n.drawRoundRect(inset, h * 0.5f, w - inset, h + 5.dp.toPx(), r, r, glowPaint)
+            // ombra corta che stacca il riquadro dal fondo
+            n.drawRoundRect(2.dp.toPx(), 3.dp.toPx(), w - 2.dp.toPx(), h + 3.dp.toPx(), r, r, shadowPaint)
+            // linea LED
+            val y = h + 2.5.dp.toPx()
+            linePaint.shader = android.graphics.LinearGradient(
+                w * 0.12f, y, w * 0.88f, y,
+                intArrayOf(Color.Transparent.toArgb(), color.toArgb(), color.toArgb(), Color.Transparent.toArgb()),
+                floatArrayOf(0f, 0.3f, 0.7f, 1f),
+                android.graphics.Shader.TileMode.CLAMP,
+            )
+            linePaint.strokeWidth = 2.dp.toPx()
+            n.drawLine(w * 0.12f, y, w * 0.88f, y, linePaint)
+        }
+    }
+}
+
+/** Modificatore "pannello": riquadro scuro in rilievo con luce LED sotto. */
+fun Modifier.panel(radius: Dp = 18.dp, glow: Color = Cyan): Modifier {
+    val shape = RoundedCornerShape(radius)
+    return this.ledGlow(radius, glow)
+        .clip(shape)
+        .background(Brush.verticalGradient(listOf(Color(0xFF18222F), Color(0xFF0F1722))))
+        .border(1.dp, BevelBrush, shape)
+}
 
 /** Pulsante principale con gradiente d'accento. */
 @Composable

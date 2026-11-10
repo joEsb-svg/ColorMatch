@@ -83,8 +83,8 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
     val today = store.history.count { isSameDay(it.time, System.currentTimeMillis()) }
     Scaffold(containerColor = Color.Transparent) { pad ->
         Column(
-            Modifier.padding(pad).padding(horizontal = 20.dp).fillMaxSize().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -100,7 +100,6 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
 
             // Stato del sistema, come un pannello di controllo
             Row(
@@ -121,8 +120,14 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
             Box(
                 Modifier
                     .fillMaxWidth()
+                    .ledGlow(24.dp, strength = 0.8f)
                     .clip(RoundedCornerShape(24.dp))
                     .background(AccentBrush)
+                    .border(
+                        1.5.dp,
+                        Brush.verticalGradient(0f to Color(0xB3FFFFFF), 0.4f to Color(0x22FFFFFF), 1f to Color(0x59000000)),
+                        RoundedCornerShape(24.dp),
+                    )
                     .clickable { go(Screen.Verify) }
                     .padding(22.dp)
             ) {
