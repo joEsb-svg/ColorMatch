@@ -22,6 +22,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -151,13 +156,25 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Tile("Storico", "${store.history.size} verifiche · Excel e PDF", Icons.Filled.DateRange, Modifier.weight(1f)) { go(Screen.History) }
-                Tile("Campioni", "${data.refs.size} riferimenti salvati", Icons.Filled.Star, Modifier.weight(1f)) { go(Screen.Refs) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Tile("Calibrazione", "Cabina luce e posizione", Icons.Filled.Build, Modifier.weight(1f)) { go(Screen.Calibrate) }
-                Tile("Impostazioni", "Materiali, soglie ΔE, tasti", Icons.Filled.Settings, Modifier.weight(1f)) { go(Screen.Settings) }
+            // Pulsantiera: quattro tasti quadrati su una placca, con la barra LED al centro
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .ledGlow(24.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF263242), Color(0xFF121A25))))
+                    .border(1.dp, BevelBrush, RoundedCornerShape(24.dp))
+                    .padding(12.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    KeyButton("Storico", "${store.history.size} verifiche", Icons.Filled.DateRange, true, Modifier.weight(1f)) { go(Screen.History) }
+                    KeyButton("Campioni", "${data.refs.size} salvati", Icons.Filled.Star, false, Modifier.weight(1f)) { go(Screen.Refs) }
+                }
+                LedBar()
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    KeyButton("Calibrazione", "Cabina luce", Icons.Filled.Build, true, Modifier.weight(1f)) { go(Screen.Calibrate) }
+                    KeyButton("Impostazioni", "Materiali e soglie", Icons.Filled.Settings, false, Modifier.weight(1f)) { go(Screen.Settings) }
+                }
             }
             Spacer(Modifier.height(20.dp))
         }
@@ -177,24 +194,81 @@ private fun StatusItem(label: String, value: String, dot: Color, modifier: Modif
     }
 }
 
+/** Barra luminosa orizzontale al centro della pulsantiera. */
 @Composable
-private fun Tile(title: String, subtitle: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(
+private fun LedBar() {
+    Canvas(Modifier.fillMaxWidth().padding(vertical = 3.dp).height(9.dp)) {
+        drawRoundRect(Color(0xFF04070B), cornerRadius = CornerRadius(2.dp.toPx()))
+        val y = size.height / 2f
+        val brush = Brush.horizontalGradient(
+            0f to Color.Transparent, 0.2f to Color(0xFF2F6BFF), 0.5f to Cyan, 0.8f to Color(0xFF2F6BFF), 1f to Color.Transparent,
+        )
+        drawLine(brush, Offset(0f, y), Offset(size.width, y), strokeWidth = size.height, alpha = 0.28f)
+        drawLine(brush, Offset(size.width * 0.06f, y), Offset(size.width * 0.94f, y), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
+/** Tasto quadrato in metallo spazzolato con la fessura LED, come i tasti di una pulsantiera. */
+@Composable
+private fun KeyButton(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    ledLeft: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(5.dp)
+    val face = if (pressed) listOf(Color(0xFF18212D), Color(0xFF1D2835)) else listOf(Color(0xFF2B3747), Color(0xFF1A2330))
+    Box(
         modifier
-            .height(140.dp)
-            .panel(22.dp)
-            .clickable(onClick = onClick)
-            .padding(16.dp),
+            .aspectRatio(1f)
+            .clip(shape)
+            .background(Brush.linearGradient(face))
+            .drawBehind {
+                // trama orizzontale del metallo spazzolato
+                val gap = 2.5.dp.toPx()
+                var y = gap
+                var i = 0
+                while (y < size.height) {
+                    drawLine(
+                        if (i % 2 == 0) Color(0x0DFFFFFF) else Color(0x12000000),
+                        Offset(0f, y), Offset(size.width, y), strokeWidth = 1f,
+                    )
+                    y += gap
+                    i++
+                }
+            }
+            .border(
+                1.dp,
+                if (pressed) Brush.verticalGradient(0f to Color(0x99000000), 1f to Color(0x30FFFFFF)) else BevelBrush,
+                shape,
+            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(14.dp),
     ) {
-        Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color(0x1F35D6FF)),
-            contentAlignment = Alignment.Center,
+        // fessura LED sul lato esterno del tasto
+        Canvas(
+            Modifier.align(if (ledLeft) Alignment.TopStart else Alignment.TopEnd).padding(top = 8.dp).width(30.dp).height(10.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = Cyan, modifier = Modifier.size(22.dp))
+            val y = size.height / 2f
+            val glow = if (pressed) 0.75f else 0.4f
+            drawLine(Cyan, Offset(0f, y), Offset(size.width, y), strokeWidth = size.height, cap = StrokeCap.Round, alpha = glow * 0.35f)
+            drawLine(Cyan, Offset(2f, y), Offset(size.width - 2f, y), strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round, alpha = glow * 0.6f)
+            drawLine(Color.White, Offset(3f, y), Offset(size.width - 3f, y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
         }
-        Spacer(Modifier.weight(1f))
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextDim, maxLines = 2)
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = Color(0xFF7F8EA3),
+            modifier = Modifier.align(if (ledLeft) Alignment.TopEnd else Alignment.TopStart).size(20.dp),
+        )
+        Column(Modifier.align(Alignment.BottomStart)) {
+            Text(title.uppercase(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 1.4.sp, maxLines = 1)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextDim, maxLines = 1)
+        }
     }
 }
 
