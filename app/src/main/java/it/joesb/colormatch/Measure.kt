@@ -28,7 +28,16 @@ data class FrameStats(val lab: Lab?, val excluded: Double, val saturated: Double
 data class Measurement(val lab: Lab, val spread: Double, val excluded: Double, val saturated: Double)
 
 /** Parametri della fotocamera letti dall'ultimo scatto. */
-data class CaptureInfo(val exposureNs: Long?, val iso: Int?, val gains: FloatArray?, val transform: IntArray?)
+data class CaptureInfo(
+    val exposureNs: Long?,
+    val iso: Int?,
+    val gains: FloatArray?,
+    val transform: IntArray?,
+    /** Distanza di messa a fuoco in diottrie (1/metri); null se non disponibile. */
+    val focusDiopters: Float?,
+    /** true quando l'autofocus è a fuoco. */
+    val focused: Boolean,
+)
 
 enum class CamMode {
     /** Esposizione e bilanciamento automatici (per calibrare la cabina). */
@@ -229,6 +238,12 @@ class MeasureController {
             iso = result.get(CaptureResult.SENSOR_SENSITIVITY),
             gains = gains,
             transform = transform,
+            focusDiopters = result.get(CaptureResult.LENS_FOCUS_DISTANCE),
+            focused = when (result.get(CaptureResult.CONTROL_AF_STATE)) {
+                CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED,
+                CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED -> true
+                else -> false
+            },
         )
     }
 

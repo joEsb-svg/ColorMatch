@@ -31,6 +31,10 @@ data class CameraProfile(
     val iso: Int,
     val gains: FloatArray?,
     val transform: IntArray?,
+    /** Messa a fuoco al momento della calibrazione (per la guida distanza). */
+    val focusDiopters: Float? = null,
+    /** Vettore gravità normalizzato al momento della calibrazione (per la guida inclinazione). */
+    val gravity: FloatArray? = null,
 )
 
 data class AppData(
@@ -207,6 +211,8 @@ class Store(context: Context) {
                 .put("iso", p.iso)
             p.gains?.let { g -> po.put("gains", JSONArray().apply { g.forEach { put(it.toDouble()) } }) }
             p.transform?.let { t -> po.put("transform", JSONArray().apply { t.forEach { put(it) } }) }
+            p.focusDiopters?.let { po.put("focusDiopters", it.toDouble()) }
+            p.gravity?.let { g -> po.put("gravity", JSONArray().apply { g.forEach { put(it.toDouble()) } }) }
             o.put("profile", po)
         }
         return o
@@ -249,6 +255,10 @@ class Store(context: Context) {
                 },
                 transform = p.optJSONArray("transform")?.let { t ->
                     IntArray(t.length()) { t.getInt(it) }
+                },
+                focusDiopters = if (p.has("focusDiopters")) p.getDouble("focusDiopters").toFloat() else null,
+                gravity = p.optJSONArray("gravity")?.let { g ->
+                    FloatArray(g.length()) { g.getDouble(it).toFloat() }
                 },
             )
         }

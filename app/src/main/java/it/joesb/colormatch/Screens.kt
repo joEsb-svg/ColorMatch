@@ -147,6 +147,7 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 CameraPermissionGate {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         CameraPanel(controller, CamMode.PROFILE, data.profile)
+                        PositionGuide(controller, data.profile)
                         ExposureStatus(controller)
                         LiveReadout(controller)
                         OutlinedTextField(
@@ -351,6 +352,7 @@ fun NewRefScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
             CameraPermissionGate {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     CameraPanel(controller, CamMode.PROFILE, profile)
+                    PositionGuide(controller, profile)
                     ExposureStatus(controller)
                     LiveReadout(controller)
                     MeasureButton(controller, label = "AGGIUNGI MISURA (${samples.size})") { m ->
@@ -416,13 +418,24 @@ fun CalibrateScreen(store: Store, onBack: () -> Unit) {
     val manualSensor by controller.manualSensor.collectAsState()
     val manualPost by controller.manualPost.collectAsState()
     var confirm by remember { mutableStateOf(false) }
+    val gravity by rememberGravity()
 
     fun save() {
         val c = capture ?: return
         val exp = c.exposureNs ?: return
         val iso = c.iso ?: return
         store.update { d ->
-            d.copy(profile = CameraProfile(System.currentTimeMillis(), exp, iso, c.gains, c.transform))
+            d.copy(
+                profile = CameraProfile(
+                    id = System.currentTimeMillis(),
+                    exposureNs = exp,
+                    iso = iso,
+                    gains = c.gains,
+                    transform = c.transform,
+                    focusDiopters = c.focusDiopters?.takeIf { c.focused },
+                    gravity = gravity,
+                )
+            )
         }
         onBack()
     }
@@ -434,7 +447,8 @@ fun CalibrateScreen(store: Store, onBack: () -> Unit) {
         ) {
             Text(
                 "Accendi la luce della cabina e appoggia un cartoncino grigio neutro (va bene anche un foglio bianco opaco) " +
-                    "dove metterai i pezzi. Tieni il telefono alla distanza che userai sempre, aspetta che l'immagine si stabilizzi e salva.",
+                    "dove metterai i pezzi. Tieni il telefono nella posizione che userai sempre (meglio su un supporto), aspetta che sia a fuoco e salva: " +
+                    "l'app ricorda anche inclinazione e distanza e in verifica ti guida a rimetterti uguale.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             CameraPermissionGate {
@@ -447,6 +461,16 @@ fun CalibrateScreen(store: Store, onBack: () -> Unit) {
             if (c?.exposureNs != null && c.iso != null) {
                 val denom = (1_000_000_000.0 / c.exposureNs).roundToInt()
                 Text("Esposizione 1/$denom s · ISO ${c.iso}", style = MaterialTheme.typography.bodyMedium)
+                val fd = c.focusDiopters
+                Text(
+                    when {
+                        fd == null || fd <= 0.05f -> "Distanza: non rilevabile con questo telefono (la guida userà solo l'inclinazione)"
+                        !c.focused -> "Messa a fuoco in corso…"
+                        else -> "A fuoco · distanza ~${(100.0 / fd).roundToInt()} cm"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
             }
             if (ready) {
                 Text(
