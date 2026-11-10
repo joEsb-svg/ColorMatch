@@ -172,8 +172,8 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
                 }
                 LedBar()
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    KeyButton("Calibrazione", "Cabina luce", Icons.Filled.Build, true, Modifier.weight(1f)) { go(Screen.Calibrate) }
-                    KeyButton("Impostazioni", "Materiali e soglie", Icons.Filled.Settings, false, Modifier.weight(1f)) { go(Screen.Settings) }
+                    KeyButton("Calibrazione", "Cabina luce", Icons.Filled.Build, true, Modifier.weight(1f), ledTop = false) { go(Screen.Calibrate) }
+                    KeyButton("Impostazioni", "Materiali, soglie", Icons.Filled.Settings, false, Modifier.weight(1f), ledTop = false) { go(Screen.Settings) }
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -216,6 +216,7 @@ private fun KeyButton(
     icon: ImageVector,
     ledLeft: Boolean,
     modifier: Modifier = Modifier,
+    ledTop: Boolean = true,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -251,7 +252,18 @@ private fun KeyButton(
     ) {
         // fessura LED sul lato esterno del tasto
         Canvas(
-            Modifier.align(if (ledLeft) Alignment.TopStart else Alignment.TopEnd).padding(top = 8.dp).width(30.dp).height(10.dp)
+            Modifier
+                .align(
+                    when {
+                        ledTop && ledLeft -> Alignment.TopStart
+                        ledTop -> Alignment.TopEnd
+                        ledLeft -> Alignment.BottomStart
+                        else -> Alignment.BottomEnd
+                    }
+                )
+                .padding(top = if (ledTop) 8.dp else 0.dp, bottom = if (ledTop) 0.dp else 8.dp)
+                .width(30.dp)
+                .height(10.dp)
         ) {
             val y = size.height / 2f
             val glow = if (pressed) 0.75f else 0.4f
@@ -263,10 +275,19 @@ private fun KeyButton(
             icon,
             contentDescription = null,
             tint = Color(0xFF7F8EA3),
-            modifier = Modifier.align(if (ledLeft) Alignment.TopEnd else Alignment.TopStart).size(20.dp),
+            modifier = Modifier
+                .align(
+                    when {
+                        ledTop && ledLeft -> Alignment.TopEnd
+                        ledTop -> Alignment.TopStart
+                        ledLeft -> Alignment.BottomEnd
+                        else -> Alignment.BottomStart
+                    }
+                )
+                .size(20.dp),
         )
-        Column(Modifier.align(Alignment.BottomStart)) {
-            Text(title.uppercase(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 1.4.sp, maxLines = 1)
+        Column(Modifier.align(if (ledTop) Alignment.BottomStart else Alignment.TopStart)) {
+            Text(title.uppercase(), fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.7.sp, maxLines = 1, softWrap = false)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextDim, maxLines = 1)
         }
     }
