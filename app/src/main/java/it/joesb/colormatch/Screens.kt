@@ -457,11 +457,15 @@ fun NewRefScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 return@Column
             }
             Picker("Tipo tasto", data.buttonTypes, type, { type = it })
-            Picker("Materiale", data.materials.map { it.name }, material, { material = it })
+            Picker("Materiale", data.materials.map { it.name }, material, { material = it; color = "" })
+            val presets = data.materials.firstOrNull { it.name == material }?.colors ?: emptyList()
+            if (presets.isNotEmpty()) {
+                Picker("Colore", presets, color.takeIf { it in presets }, { color = it })
+            }
             OutlinedTextField(
                 value = color,
                 onValueChange = { color = it },
-                label = { Text("Colore (es. Bianco RAL 9010, Antracite…)") },
+                label = { Text(if (presets.isNotEmpty()) "…oppure scrivi un altro colore" else "Colore (es. Bianco RAL 9010, Antracite…)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -658,6 +662,8 @@ fun SettingsScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
             data.materials.forEach { m ->
                 MaterialRow(m, onChange = { t ->
                     store.update { d -> d.copy(materials = d.materials.map { if (it.name == m.name) it.copy(threshold = t) else it }) }
+                }, onColors = { list ->
+                    store.update { d -> d.copy(materials = d.materials.map { if (it.name == m.name) it.copy(colors = list) else it }) }
                 }, onDelete = {
                     store.update { d -> d.copy(materials = d.materials.filterNot { it.name == m.name }) }
                 })
@@ -698,8 +704,9 @@ private fun Section(title: String) {
 }
 
 @Composable
-private fun MaterialRow(m: Material, onChange: (Double) -> Unit, onDelete: () -> Unit) {
+private fun MaterialRow(m: Material, onChange: (Double) -> Unit, onColors: (List<String>) -> Unit, onDelete: () -> Unit) {
     var value by remember(m.name) { mutableStateOf(m.threshold.toFloat()) }
+    var colorsText by remember(m.name) { mutableStateOf(m.colors.joinToString(", ")) }
     LaunchedEffect(m.threshold) { value = m.threshold.toFloat() }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -717,6 +724,15 @@ private fun MaterialRow(m: Material, onChange: (Double) -> Unit, onDelete: () ->
                 onValueChangeFinished = { onChange(value.toDouble()) },
                 valueRange = 0.3f..6f,
                 modifier = Modifier.padding(end = 10.dp),
+            )
+            OutlinedTextField(
+                value = colorsText,
+                onValueChange = { t ->
+                    colorsText = t
+                    onColors(t.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct())
+                },
+                label = { Text("Colori (separati da virgola)") },
+                modifier = Modifier.fillMaxWidth().padding(end = 10.dp, bottom = 8.dp),
             )
         }
     }

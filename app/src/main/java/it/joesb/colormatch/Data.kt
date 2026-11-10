@@ -9,7 +9,12 @@ import org.json.JSONObject
 import java.io.File
 
 /** Materiale con la sua soglia di accettazione ΔE00. */
-data class Material(val name: String, val threshold: Double)
+data class Material(
+    val name: String,
+    val threshold: Double,
+    /** Colori previsti per questo materiale (da scegliere quando si crea un campione). */
+    val colors: List<String> = emptyList(),
+)
 
 /** Campione di riferimento: tipo tasto + materiale + colore, misurato in cabina. */
 data class Reference(
@@ -49,18 +54,12 @@ data class AppData(
     companion object {
         fun defaults() = AppData(
             materials = listOf(
+                Material("Metal spazzolato", 2.0, listOf("Antique Bronze", "Gold", "Champagne Gold", "Silver")),
                 Material("Fenix", 1.5),
-                Material("Metallo spazzolato", 2.0),
-                Material("Metallo lucido", 2.5),
-                Material("Vetro", 1.5),
-                Material("Plastica", 1.0),
             ),
             buttonTypes = listOf(
-                "Tasto singolo",
-                "Pulsantiera 2 tasti",
-                "Pulsantiera 4 tasti",
-                "Pulsantiera 6 tasti",
-                "Placca",
+                "4 canali (tasto quadrato)",
+                "8 canali (tasto rettangolare)",
             ),
             refs = emptyList(),
             profile = null,
@@ -183,9 +182,9 @@ class Store(context: Context) {
 
     private fun toJson(d: AppData): JSONObject {
         val o = JSONObject()
-        o.put("version", 1)
+        o.put("version", 2)
         o.put("materials", JSONArray().apply {
-            d.materials.forEach { put(JSONObject().put("name", it.name).put("threshold", it.threshold)) }
+            d.materials.forEach { put(JSONObject().put("name", it.name).put("threshold", it.threshold).put("colors", JSONArray().apply { it.colors.forEach { c -> put(c) } })) }
         })
         o.put("buttonTypes", JSONArray().apply { d.buttonTypes.forEach { put(it) } })
         o.put("refs", JSONArray().apply {
@@ -223,7 +222,11 @@ class Store(context: Context) {
         val materials = o.optJSONArray("materials")?.let { arr ->
             (0 until arr.length()).map {
                 val m = arr.getJSONObject(it)
-                Material(m.getString("name"), m.getDouble("threshold"))
+                Material(
+                    m.getString("name"),
+                    m.getDouble("threshold"),
+                    m.optJSONArray("colors")?.let { c -> (0 until c.length()).map { i -> c.getString(i) } } ?: emptyList(),
+                )
             }
         } ?: def.materials
         val types = o.optJSONArray("buttonTypes")?.let { arr ->
@@ -261,6 +264,10 @@ class Store(context: Context) {
                     FloatArray(g.length()) { g.getDouble(it).toFloat() }
                 },
             )
+        }
+        // Catalogo vecchio (prima versione) e nessun campione salvato: passa al nuovo catalogo predefinito.
+        if (o.optInt("version", 1) < 2 && refs.isEmpty()) {
+            return AppData(def.materials, def.buttonTypes, refs, profile)
         }
         return AppData(materials, types, refs, profile)
     }
