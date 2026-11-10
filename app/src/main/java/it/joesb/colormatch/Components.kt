@@ -49,6 +49,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -79,30 +81,23 @@ import java.util.concurrent.Executors
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-val OkGreen = Color(0xFF2E7D32)
-val BadRed = Color(0xFFC62828)
-val WarnAmber = Color(0xFFFFB300)
-
-private val scheme = darkColorScheme(
-    primary = Color(0xFF7FD1FF),
-    onPrimary = Color(0xFF00222F),
-    secondary = Color(0xFFB8C2CC),
-    background = Color(0xFF111316),
-    surface = Color(0xFF181B20),
-    surfaceVariant = Color(0xFF22262C),
-)
-
-@Composable
-fun ColorMatchTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, content = content)
-}
-
 fun fmt(v: Double, decimals: Int = 1): String = String.format(Locale.ITALY, "%.${decimals}f", v)
 
 @Composable
 fun Bar(title: String, onBack: (() -> Unit)?) {
     TopAppBar(
-        title = { Text(title) },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
+        ),
+        title = {
+            Text(
+                title.uppercase(),
+                style = MaterialTheme.typography.titleMedium,
+                letterSpacing = 2.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
         navigationIcon = {
             if (onBack != null) {
                 IconButton(onClick = onBack) {
@@ -154,15 +149,23 @@ fun Picker(
 }
 
 @Composable
-fun InfoCard(text: String, color: Color = MaterialTheme.colorScheme.surfaceVariant, content: @Composable () -> Unit = {}) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = color),
-        modifier = Modifier.fillMaxWidth(),
+fun InfoCard(text: String, color: Color = Color(0xCC111A27), content: @Composable () -> Unit = {}) {
+    val warn = color == WarnBg
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(color)
+            .border(1.dp, if (warn) WarnAmber.copy(alpha = 0.45f) else Line, shape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text)
-            content()
+        if (warn) {
+            Text("ATTENZIONE", color = WarnAmber, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         }
+        Text(text, style = MaterialTheme.typography.bodyMedium)
+        content()
     }
 }
 
@@ -266,15 +269,21 @@ fun CameraPanel(
         modifier
             .fillMaxWidth()
             .aspectRatio(3f / 4f)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(Color.Black)
+            .border(1.dp, Color(0x4035D6FF), RoundedCornerShape(22.dp))
     ) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
         Canvas(Modifier.fillMaxSize()) {
             val s = min(size.width, size.height) * ROI_FRACTION
             val tl = Offset((size.width - s) / 2f, (size.height - s) / 2f)
-            drawRect(Color(0x66000000), topLeft = tl, size = Size(s, s), style = Stroke(7.dp.toPx()))
-            drawRect(Color.White, topLeft = tl, size = Size(s, s), style = Stroke(2.dp.toPx()))
+            drawRect(Color(0x33000000), topLeft = tl, size = Size(s, s), style = Stroke(1.dp.toPx()))
+            drawBrackets(tl, s, Color(0x99000000), 6.dp.toPx())
+            drawBrackets(tl, s, Cyan, 3.dp.toPx())
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val k = 5.dp.toPx()
+            drawLine(Color(0xCCFFFFFF), Offset(c.x - k, c.y), Offset(c.x + k, c.y), strokeWidth = 1.5.dp.toPx())
+            drawLine(Color(0xCCFFFFFF), Offset(c.x, c.y - k), Offset(c.x, c.y + k), strokeWidth = 1.5.dp.toPx())
         }
     }
 }
@@ -328,7 +337,7 @@ fun ExposureStatus(controller: MeasureController) {
         InfoCard(
             "Questo telefono non accetta l'esposizione manuale. Inquadra il cartoncino grigio (o il campione buono), " +
                 "attiva il blocco, poi inquadra il pezzo senza muovere la luce.",
-            color = Color(0xFF3A2F12),
+            color = WarnBg,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = locked, onCheckedChange = { controller.setLocked(it) })
@@ -350,20 +359,15 @@ fun MeasureButton(
     val progress by controller.progress.collectAsState()
     val ready by controller.cameraReady.collectAsState()
     Column(Modifier.fillMaxWidth()) {
-        Button(
+        GradientButton(
+            text = if (progress != null) "MISURO… TIENI FERMO" else label,
             onClick = { controller.measure(onResult) },
             enabled = enabled && ready && progress == null,
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) {
-            Text(
-                if (progress != null) "Misuro… tieni fermo" else label,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        )
         val p = progress
         if (p != null) {
             Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)), color = Cyan, trackColor = Color(0x22FFFFFF))
         }
     }
 }

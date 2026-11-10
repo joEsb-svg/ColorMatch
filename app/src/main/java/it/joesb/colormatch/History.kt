@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,7 +99,7 @@ fun HistoryScreen(store: Store, onBack: () -> Unit) {
         }
     }
 
-    Scaffold(topBar = { Bar("Storico verifiche", onBack) }) { pad ->
+    Scaffold(containerColor = Color.Transparent, topBar = { Bar("Storico verifiche", onBack) }) { pad ->
         LazyColumn(
             Modifier.padding(pad).fillMaxSize(),
             contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 32.dp),
@@ -133,10 +135,8 @@ fun HistoryScreen(store: Store, onBack: () -> Unit) {
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { export(false) }, enabled = shown.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                                Text("Excel (CSV)")
-                            }
-                            OutlinedButton(onClick = { export(true) }, enabled = shown.isNotEmpty(), modifier = Modifier.weight(1f)) {
+                            GradientButton("EXCEL (CSV)", { export(false) }, Modifier.weight(1f), enabled = shown.isNotEmpty(), height = 44.dp)
+                            OutlinedButton(onClick = { export(true) }, enabled = shown.isNotEmpty(), modifier = Modifier.weight(1f).height(44.dp)) {
                                 Text("Report PDF")
                             }
                         }

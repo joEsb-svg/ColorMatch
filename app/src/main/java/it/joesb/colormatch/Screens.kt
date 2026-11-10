@@ -2,6 +2,26 @@
 
 package it.joesb.colormatch
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -60,37 +80,127 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeScreen(store: Store, go: (Screen) -> Unit) {
     val data = store.data
-    Scaffold(topBar = { Bar("ColorMatch", null) }) { pad ->
+    val ctx = LocalContext.current
+    val version = remember {
+        try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
+    }
+    val today = store.history.count { isSameDay(it.time, System.currentTimeMillis()) }
+    Scaffold(containerColor = Color.Transparent) { pad ->
         Column(
-            Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
+            Modifier.padding(pad).padding(horizontal = 20.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (data.profile == null) {
-                InfoCard("La cabina non è ancora calibrata. Fallo una volta prima di creare campioni e verificare.", Color(0xFF3A2F12)) {
-                    Button(onClick = { go(Screen.Calibrate) }) { Text("Calibra cabina") }
+            Spacer(Modifier.height(18.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LogoMark(52.dp)
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text("ColorMatch", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        "CONTROLLO COLORE DI PRECISIONE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Cyan,
+                        letterSpacing = 1.6.sp,
+                    )
                 }
             }
-            BigAction("Verifica pezzo", "Scegli tasto, materiale e colore e controlla se è conforme") { go(Screen.Verify) }
-            val today = store.history.count { isSameDay(it.time, System.currentTimeMillis()) }
-            BigAction("Storico verifiche", "${store.history.size} verifiche · $today oggi · esporta in Excel o PDF") { go(Screen.History) }
-            BigAction("Campioni di riferimento", "${data.refs.size} campioni salvati") { go(Screen.Refs) }
-            BigAction("Impostazioni", "Cabina, materiali e soglie ΔE, tipi di tasto") { go(Screen.Settings) }
+            Spacer(Modifier.height(4.dp))
+
+            // Stato del sistema, come un pannello di controllo
+            Row(
+                Modifier.fillMaxWidth().panel(18.dp).padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                StatusItem("CABINA", if (data.profile != null) "Calibrata" else "Da calibrare", if (data.profile != null) OkGreen else WarnAmber)
+                StatusItem("CAMPIONI", data.refs.size.toString(), Cyan)
+                StatusItem("VERIFICHE OGGI", today.toString(), Violet)
+            }
+
+            if (data.profile == null) {
+                InfoCard("La cabina non è ancora calibrata. Fallo una volta prima di creare campioni e verificare.", WarnBg) {
+                    GradientButton("CALIBRA CABINA", { go(Screen.Calibrate) }, height = 46.dp)
+                }
+            }
+
+            // Azione principale
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(AccentBrush)
+                    .clickable { go(Screen.Verify) }
+                    .padding(22.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("VERIFICA PEZZO", color = Color(0xFF04121B), fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 0.6.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Inquadra, misura e scopri subito se il colore è conforme",
+                            color = Color(0xCC04121B),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier.size(54.dp).clip(RoundedCornerShape(18.dp)).background(Color(0x3304121B)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color(0xFF04121B), modifier = Modifier.size(32.dp))
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Tile("Storico", "${store.history.size} verifiche · Excel e PDF", Icons.Filled.DateRange, Modifier.weight(1f)) { go(Screen.History) }
+                Tile("Campioni", "${data.refs.size} riferimenti salvati", Icons.Filled.Star, Modifier.weight(1f)) { go(Screen.Refs) }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Tile("Calibrazione", "Cabina luce e posizione", Icons.Filled.Build, Modifier.weight(1f)) { go(Screen.Calibrate) }
+                Tile("Impostazioni", "Materiali, soglie ΔE, tasti", Icons.Filled.Settings, Modifier.weight(1f)) { go(Screen.Settings) }
+            }
+            Text(
+                "v$version",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF4B5868),
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 20.dp),
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
 
 @Composable
-private fun BigAction(title: String, subtitle: String, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+private fun StatusItem(label: String, value: String, dot: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+            Spacer(Modifier.width(6.dp))
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
+        Spacer(Modifier.height(2.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = TextDim, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun Tile(title: String, subtitle: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .height(140.dp)
+            .panel(22.dp)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(13.dp)).background(Color(0x1F35D6FF)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = Cyan, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextDim, maxLines = 2)
     }
 }
 
@@ -113,13 +223,13 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     val colors = refs.filter { it.buttonType == type && it.material == material }.sortedBy { it.color }
     val ref = refs.firstOrNull { it.id == refId }
 
-    Scaffold(topBar = { Bar("Verifica pezzo", onBack) }) { pad ->
+    Scaffold(containerColor = Color.Transparent, topBar = { Bar("Verifica pezzo", onBack) }) { pad ->
         Column(
             Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (data.profile == null) {
-                InfoCard("Prima calibra la cabina.", Color(0xFF3A2F12)) {
+                InfoCard("Prima calibra la cabina.", WarnBg) {
                     Button(onClick = { go(Screen.Calibrate) }) { Text("Calibra cabina") }
                 }
                 return@Column
@@ -141,7 +251,7 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 if (ref.profileId != data.profile.id) {
                     InfoCard(
                         "Questo campione è stato creato con una calibrazione cabina diversa: il confronto non è affidabile. Rifai il campione.",
-                        Color(0xFF3A2F12),
+                        WarnBg,
                     )
                 }
                 CameraPermissionGate {
@@ -183,7 +293,7 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                     }
                 }
                 if (failed) {
-                    InfoCard("Misura non riuscita: troppi riflessi o pezzo fuori dal riquadro. Riprova.", Color(0xFF3A2F12))
+                    InfoCard("Misura non riuscita: troppi riflessi o pezzo fuori dal riquadro. Riprova.", WarnBg)
                 }
                 result?.let { ResultCard(ref, it, data.thresholdFor(ref.material)) }
             }
@@ -195,51 +305,73 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
 private fun ResultCard(ref: Reference, m: Measurement, threshold: Double) {
     val de = ColorMath.deltaE2000(ref.lab, m.lab)
     val ok = de <= threshold
-    Card(
-        colors = CardDefaults.cardColors(containerColor = if (ok) OkGreen else BadRed),
-        modifier = Modifier.fillMaxWidth(),
+    val tone = if (ok) OkGreen else BadRed
+    val shape = RoundedCornerShape(24.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(tone.copy(alpha = 0.30f), Color(0xE6101824))))
+            .border(1.5.dp, tone.copy(alpha = 0.8f), shape)
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            Modifier.padding(18.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                if (ok) "CONFORME" else "NON CONFORME",
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
-            )
-            Text(
-                "ΔE00 = ${fmt(de, 2)}   (soglia ${fmt(threshold)})",
-                fontSize = 18.sp,
-                color = Color.White,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Swatch(ref.lab, 56.dp)
-                    Text("Campione", color = Color.White, style = MaterialTheme.typography.labelSmall)
+        Text(
+            if (ok) "CONFORME" else "NON CONFORME",
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.5.sp,
+            color = tone,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Indicatore: l'arco si riempie fino alla soglia (metà scala) e oltre
+            Box(Modifier.size(132.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val sw = 11.dp.toPx()
+                    val inset = sw / 2
+                    val arcSize = Size(size.width - sw, size.height - sw)
+                    val tl = Offset(inset, inset)
+                    drawArc(Color(0x26FFFFFF), 135f, 270f, false, tl, arcSize, style = Stroke(sw, cap = StrokeCap.Round))
+                    val frac = (de / (threshold * 2.0)).coerceIn(0.0, 1.0).toFloat()
+                    drawArc(tone, 135f, 270f * frac, false, tl, arcSize, style = Stroke(sw, cap = StrokeCap.Round))
+                    // tacca della soglia a metà arco (in alto)
+                    val cx = size.width / 2f
+                    drawLine(Color.White, Offset(cx, 0f), Offset(cx, sw + 3.dp.toPx()), strokeWidth = 2.5.dp.toPx())
                 }
-                Spacer(Modifier.width(20.dp))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Swatch(m.lab, 56.dp)
-                    Text("Pezzo", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    Text(fmt(de, 2), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("ΔE00", style = MaterialTheme.typography.labelSmall, color = TextDim)
                 }
             }
-            val hints = differenceHints(ref.lab, m.lab)
-            if (hints.isNotEmpty()) {
-                Text("Il pezzo è " + hints.joinToString(", "), color = Color.White, textAlign = TextAlign.Center)
+            Spacer(Modifier.width(18.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Soglia ${fmt(threshold)}", style = MaterialTheme.typography.bodyMedium, color = TextDim)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Swatch(ref.lab, 44.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Campione", style = MaterialTheme.typography.bodySmall)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Swatch(m.lab, 44.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Pezzo", style = MaterialTheme.typography.bodySmall)
+                }
             }
-            val warn = buildList {
-                if (m.spread > 0.8) add("misura instabile: tieni fermo il telefono")
-                if (m.excluded > 0.5) add("molti riflessi esclusi: inclina un po' il pezzo")
-                if (m.saturated > 0.05) add("zone bruciate nel riquadro")
-            }
-            if (warn.isNotEmpty()) {
-                Text("⚠ " + warn.joinToString("; "), color = Color.White, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-            }
-            Text("Salvata nello storico", color = Color(0xCCFFFFFF), style = MaterialTheme.typography.labelSmall)
         }
+        val hints = differenceHints(ref.lab, m.lab)
+        if (hints.isNotEmpty()) {
+            Text("Il pezzo è " + hints.joinToString(", "), textAlign = TextAlign.Center)
+        }
+        val warn = buildList {
+            if (m.spread > 0.8) add("misura instabile: tieni fermo il telefono")
+            if (m.excluded > 0.5) add("molti riflessi esclusi: inclina un po' il pezzo")
+            if (m.saturated > 0.05) add("zone bruciate nel riquadro")
+        }
+        if (warn.isNotEmpty()) {
+            Text("⚠ " + warn.joinToString("; "), color = WarnAmber, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        }
+        Text("SALVATA NELLO STORICO", color = TextDim, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -250,6 +382,7 @@ fun RefsScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     val data = store.data
     var toDelete by remember { mutableStateOf<Reference?>(null) }
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = { Bar("Campioni di riferimento", onBack) },
         floatingActionButton = {
             FloatingActionButton(onClick = { go(Screen.NewRef) }) {
@@ -322,14 +455,14 @@ fun NewRefScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     var failed by remember { mutableStateOf(false) }
     val controller = remember { MeasureController() }
 
-    Scaffold(topBar = { Bar("Nuovo campione", onBack) }) { pad ->
+    Scaffold(containerColor = Color.Transparent, topBar = { Bar("Nuovo campione", onBack) }) { pad ->
         Column(
             Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val profile = data.profile
             if (profile == null) {
-                InfoCard("Prima calibra la cabina: i campioni devono essere misurati sempre con gli stessi parametri.", Color(0xFF3A2F12)) {
+                InfoCard("Prima calibra la cabina: i campioni devono essere misurati sempre con gli stessi parametri.", WarnBg) {
                     Button(onClick = { go(Screen.Calibrate) }) { Text("Calibra cabina") }
                 }
                 return@Column
@@ -361,7 +494,7 @@ fun NewRefScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                     }
                 }
             }
-            if (failed) InfoCard("Misura non riuscita: troppi riflessi. Riprova.", Color(0xFF3A2F12))
+            if (failed) InfoCard("Misura non riuscita: troppi riflessi. Riprova.", WarnBg)
 
             if (samples.isNotEmpty()) {
                 val avg = ColorMath.average(samples.map { it.lab })
@@ -401,7 +534,7 @@ fun NewRefScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                         onBack()
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) { Text("SALVA CAMPIONE", fontWeight = FontWeight.Bold) }
+                ) { Text("SALVA CAMPIONE", fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp) }
             }
         }
     }
@@ -440,7 +573,7 @@ fun CalibrateScreen(store: Store, onBack: () -> Unit) {
         onBack()
     }
 
-    Scaffold(topBar = { Bar("Calibra cabina", onBack) }) { pad ->
+    Scaffold(containerColor = Color.Transparent, topBar = { Bar("Calibra cabina", onBack) }) { pad ->
         Column(
             Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -487,7 +620,7 @@ fun CalibrateScreen(store: Store, onBack: () -> Unit) {
                 enabled = c?.exposureNs != null && c.iso != null,
                 onClick = { if (data.refs.isNotEmpty() && data.profile != null) confirm = true else save() },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("SALVA PROFILO CABINA", fontWeight = FontWeight.Bold) }
+            ) { Text("SALVA PROFILO CABINA", fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp) }
         }
     }
     if (confirm) {
@@ -509,7 +642,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     var newMaterial by remember { mutableStateOf("") }
     var newType by remember { mutableStateOf("") }
 
-    Scaffold(topBar = { Bar("Impostazioni", onBack) }) { pad ->
+    Scaffold(containerColor = Color.Transparent, topBar = { Bar("Impostazioni", onBack) }) { pad ->
         Column(
             Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),

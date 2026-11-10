@@ -21,9 +21,7 @@ class MainActivity : ComponentActivity() {
         val store = Store(applicationContext)
         setContent {
             ColorMatchTheme {
-                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    App(store)
-                }
+                TechBackground { App(store) }
             }
         }
     }
