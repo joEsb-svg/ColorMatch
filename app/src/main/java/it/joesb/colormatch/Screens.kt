@@ -80,10 +80,6 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeScreen(store: Store, go: (Screen) -> Unit) {
     val data = store.data
-    val ctx = LocalContext.current
-    val version = remember {
-        try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
-    }
     val today = store.history.count { isSameDay(it.time, System.currentTimeMillis()) }
     Scaffold(containerColor = Color.Transparent) { pad ->
         Column(
@@ -108,12 +104,11 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
 
             // Stato del sistema, come un pannello di controllo
             Row(
-                Modifier.fillMaxWidth().panel(18.dp).padding(vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                Modifier.fillMaxWidth().panel(18.dp).padding(vertical = 14.dp, horizontal = 8.dp),
             ) {
-                StatusItem("CABINA", if (data.profile != null) "Calibrata" else "Da calibrare", if (data.profile != null) OkGreen else WarnAmber)
-                StatusItem("CAMPIONI", data.refs.size.toString(), Cyan)
-                StatusItem("VERIFICHE OGGI", today.toString(), Violet)
+                StatusItem("CABINA", if (data.profile != null) "Calibrata" else "Da calibrare", if (data.profile != null) OkGreen else WarnAmber, Modifier.weight(1.4f))
+                StatusItem("CAMPIONI", data.refs.size.toString(), Cyan, Modifier.weight(1f))
+                StatusItem("OGGI", today.toString(), Violet, Modifier.weight(1f))
             }
 
             if (data.profile == null) {
@@ -159,27 +154,21 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
                 Tile("Calibrazione", "Cabina luce e posizione", Icons.Filled.Build, Modifier.weight(1f)) { go(Screen.Calibrate) }
                 Tile("Impostazioni", "Materiali, soglie ΔE, tasti", Icons.Filled.Settings, Modifier.weight(1f)) { go(Screen.Settings) }
             }
-            Text(
-                "v$version",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF4B5868),
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 20.dp),
-                textAlign = TextAlign.Center,
-            )
+            Spacer(Modifier.height(20.dp))
         }
     }
 }
 
 @Composable
-private fun StatusItem(label: String, value: String, dot: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StatusItem(label: String, value: String, dot: Color, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
             Spacer(Modifier.width(6.dp))
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
         }
         Spacer(Modifier.height(2.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextDim, fontSize = 10.sp)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = Color(0xFFA9B6C8), fontSize = 11.sp)
     }
 }
 

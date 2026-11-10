@@ -16,7 +16,9 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,7 +42,7 @@ val PanelHi = Color(0xFF151F2E)
 val Line = Color(0x1FFFFFFF)
 val Cyan = Color(0xFF35D6FF)
 val Violet = Color(0xFF7B6CFF)
-val TextDim = Color(0xFF8C9AAE)
+val TextDim = Color(0xFFA9B6C8)
 
 val OkGreen = Color(0xFF22C58B)
 val BadRed = Color(0xFFFF5263)
@@ -131,7 +133,7 @@ fun TechBackground(content: @Composable BoxScope.() -> Unit) {
                 y += step
             }
         }
-        content()
+        CompositionLocalProvider(LocalContentColor provides Color(0xFFE8EEF6)) { content() }
     }
 }
 
