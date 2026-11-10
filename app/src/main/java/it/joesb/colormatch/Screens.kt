@@ -198,26 +198,37 @@ private fun Tile(title: String, subtitle: String, icon: ImageVector, modifier: M
 @Composable
 fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
     val data = store.data
-    var type by remember { mutableStateOf<String?>(null) }
     var material by remember { mutableStateOf<String?>(null) }
-    var refId by remember { mutableStateOf<String?>(null) }
+    var color by remember { mutableStateOf<String?>(null) }
+    /** null = riconoscimento automatico del tipo di tasto. */
+    var manualType by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<Measurement?>(null) }
+    var resultRef by remember { mutableStateOf<Reference?>(null) }
     var failed by remember { mutableStateOf(false) }
     var lot by remember { mutableStateOf("") }
     val controller = remember { MeasureController() }
+    val shape by controller.shape.collectAsState()
 
     val refs = data.refs
-    val types = refs.map { it.buttonType }.distinct().sorted()
-    val materials = refs.filter { it.buttonType == type }.map { it.material }.distinct().sorted()
-    val colors = refs.filter { it.buttonType == type && it.material == material }.sortedBy { it.color }
-    val ref = refs.firstOrNull { it.id == refId }
+    val materials = refs.map { it.material }.distinct().sorted()
+    if (material == null && materials.size == 1) material = materials.first()
+    val colors = refs.filter { it.material == material }.map { it.color }.distinct().sorted()
+    val candidates = refs.filter { it.material == material && it.color == color }
+    val types = candidates.map { it.buttonType }.distinct().sorted()
+    val auto = "Automatico"
+
+    // Tipo effettivo: scelto a mano, oppure dedotto dalla forma vista dalla fotocamera
+    val detectedType = shape?.let { sh -> types.firstOrNull { shapeOfType(it) == sh } }
+    val effectiveType = manualType ?: detectedType ?: types.singleOrNull()
+    val ref = candidates.firstOrNull { it.buttonType == effectiveType }
+    val profile = data.profile
 
     Scaffold(containerColor = Color.Transparent, topBar = { Bar("Verifica pezzo", onBack) }) { pad ->
         Column(
             Modifier.padding(pad).padding(16.dp).fillMaxSize().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (data.profile == null) {
+            if (profile == null) {
                 InfoCard("Prima calibra la cabina.", WarnBg) {
                     Button(onClick = { go(Screen.Calibrate) }) { Text("Calibra cabina") }
                 }
@@ -229,15 +240,15 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 }
                 return@Column
             }
-            Picker("Tipo tasto", types, type, { type = it; material = null; refId = null; result = null })
-            Picker("Materiale", materials, material, { material = it; refId = null; result = null })
-            Picker("Colore", colors.map { it.color }, ref?.color, { c ->
-                refId = colors.firstOrNull { it.color == c }?.id
-                result = null
-            })
+            Picker("Materiale", materials, material, { material = it; color = null; manualType = null; result = null })
+            Picker("Colore", colors, color, { color = it; manualType = null; result = null })
 
-            if (ref != null) {
-                if (ref.profileId != data.profile.id) {
+            if (color != null && candidates.isNotEmpty()) {
+                Picker("Tipo tasto", listOf(auto) + types, manualType ?: auto, {
+                    manualType = if (it == auto) null else it
+                    result = null
+                })
+                if (ref != null && ref.profileId != profile.id) {
                     InfoCard(
                         "Questo campione è stato creato con una calibrazione cabina diversa: il confronto non è affidabile. Rifai il campione.",
                         WarnBg,
@@ -245,8 +256,19 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 }
                 CameraPermissionGate {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CameraPanel(controller, CamMode.PROFILE, data.profile)
-                        PositionGuide(controller, data.profile)
+                        CameraPanel(controller, CamMode.PROFILE, profile)
+                        if (manualType == null) {
+                            val sh = shape
+                            val (txt, col) = when {
+                                detectedType != null -> "Tasto riconosciuto: $detectedType" to OkGreen
+                                sh != null -> ("Riconosciuto un tasto " + (if (sh == KeyShape.SQUARE) "quadrato" else "rettangolare") +
+                                    ", ma manca il campione per questo tipo e colore") to WarnAmber
+                                types.size == 1 -> "Tasto non riconosciuto: uso l'unico campione disponibile (${types.first()})" to WarnAmber
+                                else -> "Tasto non riconosciuto: inquadra un tasto intero al centro, oppure scegli il tipo a mano" to WarnAmber
+                            }
+                            Text(txt, color = col, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        PositionGuide(controller, profile)
                         ExposureStatus(controller)
                         LiveReadout(controller)
                         OutlinedTextField(
@@ -256,10 +278,11 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        MeasureButton(controller) { m ->
+                        MeasureButton(controller, enabled = ref != null) { m ->
                             result = m
+                            resultRef = ref
                             failed = m == null
-                            if (m != null) {
+                            if (m != null && ref != null) {
                                 val threshold = data.thresholdFor(ref.material)
                                 val de = ColorMath.deltaE2000(ref.lab, m.lab)
                                 store.addCheck(
@@ -284,7 +307,12 @@ fun VerifyScreen(store: Store, onBack: () -> Unit, go: (Screen) -> Unit) {
                 if (failed) {
                     InfoCard("Misura non riuscita: troppi riflessi o pezzo fuori dal riquadro. Riprova.", WarnBg)
                 }
-                result?.let { ResultCard(ref, it, data.thresholdFor(ref.material)) }
+                val r = result
+                val rr = resultRef
+                if (r != null && rr != null) {
+                    Text("Confrontato con: ${rr.buttonType}", style = MaterialTheme.typography.bodySmall, color = TextDim)
+                    ResultCard(rr, r, data.thresholdFor(rr.material))
+                }
             }
         }
     }

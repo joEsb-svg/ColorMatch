@@ -24,6 +24,21 @@ import kotlin.math.sqrt
 /** Risultato di un singolo fotogramma. lab = null se la zona non è misurabile. */
 data class FrameStats(val lab: Lab?, val excluded: Double, val saturated: Double)
 
+/** Forma del tasto riconosciuta dall'immagine. */
+enum class KeyShape { SQUARE, RECT }
+
+/** Deduce la forma attesa dal nome del tipo di tasto (es. "4 canali (tasto quadrato)"). */
+fun shapeOfType(name: String): KeyShape? {
+    val n = name.lowercase()
+    return when {
+        "quadrat" in n -> KeyShape.SQUARE
+        "rettangol" in n -> KeyShape.RECT
+        Regex("(^|\\D)4(\\D|$)").containsMatchIn(n) -> KeyShape.SQUARE
+        Regex("(^|\\D)8(\\D|$)").containsMatchIn(n) -> KeyShape.RECT
+        else -> null
+    }
+}
+
 /** Risultato di una misura completa (mediana di più fotogrammi). */
 data class Measurement(val lab: Lab, val spread: Double, val excluded: Double, val saturated: Double)
 
@@ -54,7 +69,18 @@ const val ROI_FRACTION = 0.3f
  * e quelli troppo lontani dalla luminosità mediana (riflessi speculari, ombre, polvere),
  * poi prende la mediana. Così i riflessi di Fenix e metallo non falsano il colore.
  */
-class ColorAnalyzer(private val onFrame: (FrameStats) -> Unit) : ImageAnalysis.Analyzer {
+class ColorAnalyzer(
+    private val onFrame: (FrameStats) -> Unit,
+    private val onShape: (KeyShape?) -> Unit,
+) : ImageAnalysis.Analyzer {
+    private var frameNo = 0
+    private var gCap = 0
+    private var gl = FloatArray(0)
+    private var ga = FloatArray(0)
+    private var gb = FloatArray(0)
+    private var seen = BooleanArray(0)
+    private var queue = IntArray(0)
+
     private var cap = 0
     private var ls = FloatArray(0)
     private var aa = FloatArray(0)
@@ -135,7 +161,95 @@ class ColorAnalyzer(private val onFrame: (FrameStats) -> Unit) : ImageAnalysis.A
             Stats.median(fa, k).toDouble(),
             Stats.median(fb, k).toDouble(),
         )
+        frameNo++
+        if (frameNo % 3 == 0) {
+            onShape(detectShape(buffer, rowStride, px, w, h, lab))
+        }
         return FrameStats(lab, 1.0 - k.toDouble() / total, satFrac)
+    }
+
+    /**
+     * Riconosce la forma del tasto inquadrato al centro: parte dal centro e si allarga sui pixel
+     * di colore simile e senza salti bruschi (il bordo del tasto fa da barriera), poi dalle
+     * proporzioni della zona trovata distingue quadrato (4 canali) e rettangolo (8 canali).
+     * Usa i momenti della zona, quindi funziona anche se il tasto è ruotato.
+     */
+    private fun detectShape(
+        buffer: java.nio.ByteBuffer, rowStride: Int, px: Int, w: Int, h: Int, seed: Lab,
+    ): KeyShape? {
+        val step = max(2, min(w, h) / 160)
+        val gw = w / step
+        val gh = h / step
+        val n = gw * gh
+        if (n > gCap) {
+            gCap = n
+            gl = FloatArray(n); ga = FloatArray(n); gb = FloatArray(n)
+            seen = BooleanArray(n); queue = IntArray(n)
+        }
+        for (gy in 0 until gh) {
+            val base = gy * step * rowStride
+            for (gx in 0 until gw) {
+                val i = base + gx * step * px
+                ColorMath.rgbToLab(
+                    buffer.get(i).toInt() and 0xFF,
+                    buffer.get(i + 1).toInt() and 0xFF,
+                    buffer.get(i + 2).toInt() and 0xFF,
+                    gl, ga, gb, gy * gw + gx,
+                )
+            }
+        }
+        java.util.Arrays.fill(seen, 0, n, false)
+        val sl = seed.l.toFloat(); val sa = seed.a.toFloat(); val sb = seed.b.toFloat()
+        val start = (gh / 2) * gw + gw / 2
+        var head = 0
+        var tail = 0
+        queue[tail++] = start
+        seen[start] = true
+        var count = 0
+        var sx = 0.0; var sy = 0.0; var sxx = 0.0; var syy = 0.0; var sxy = 0.0
+        var border = false
+        while (head < tail) {
+            val c = queue[head++]
+            val cx = c % gw
+            val cy = c / gw
+            count++
+            sx += cx; sy += cy; sxx += cx.toDouble() * cx; syy += cy.toDouble() * cy; sxy += cx.toDouble() * cy
+            if (cx == 0 || cy == 0 || cx == gw - 1 || cy == gh - 1) { border = true; continue }
+            val cl = gl[c]; val ca = ga[c]; val cb = gb[c]
+            for (d in 0 until 4) {
+                val nb = when (d) { 0 -> c - 1; 1 -> c + 1; 2 -> c - gw; else -> c + gw }
+                if (seen[nb]) continue
+                val l = gl[nb]; val a = ga[nb]; val b = gb[nb]
+                if (abs(a - sa) < 7f && abs(b - sb) < 7f && abs(l - sl) < 24f &&
+                    abs(l - cl) < 6f && abs(a - ca) < 3.5f && abs(b - cb) < 3.5f
+                ) {
+                    seen[nb] = true
+                    queue[tail++] = nb
+                }
+            }
+        }
+        if (border || count < n * 0.015) return null
+        val mx = sx / count
+        val my = sy / count
+        val vxx = sxx / count - mx * mx
+        val vyy = syy / count - my * my
+        val vxy = sxy / count - mx * my
+        val tr = vxx + vyy
+        val det = vxx * vyy - vxy * vxy
+        val disc = sqrt(max(0.0, tr * tr / 4.0 - det))
+        val l1 = tr / 2.0 + disc
+        val l2 = tr / 2.0 - disc
+        if (l2 <= 0.5) return null
+        val sideA = sqrt(12.0 * l1)
+        val sideB = sqrt(12.0 * l2)
+        val fill = count / (sideA * sideB)
+        if (fill < 0.72 || fill > 1.2) return null
+        val ratio = sideA / sideB
+        return when {
+            ratio < 1.35 -> KeyShape.SQUARE
+            ratio in 1.6..2.6 -> KeyShape.RECT
+            else -> null
+        }
     }
 }
 
@@ -161,9 +275,29 @@ class MeasureController {
     private var camera: Camera? = null
     private var captureCount = 0
 
-    val analyzer = ColorAnalyzer { st ->
-        live.value = st
-        onFrame(st)
+    /** Forma del tasto riconosciuta (stabile su più fotogrammi); null = non riconosciuta. */
+    val shape = MutableStateFlow<KeyShape?>(null)
+    private val recentShapes = ArrayDeque<KeyShape?>()
+
+    val analyzer = ColorAnalyzer(
+        onFrame = { st ->
+            live.value = st
+            if (st.lab == null) pushShape(null)
+            onFrame(st)
+        },
+        onShape = { pushShape(it) },
+    )
+
+    private fun pushShape(s: KeyShape?) {
+        recentShapes.addLast(s)
+        while (recentShapes.size > 9) recentShapes.removeFirst()
+        val sq = recentShapes.count { it == KeyShape.SQUARE }
+        val re = recentShapes.count { it == KeyShape.RECT }
+        shape.value = when {
+            sq >= 5 -> KeyShape.SQUARE
+            re >= 5 -> KeyShape.RECT
+            else -> null
+        }
     }
 
     /** Avvia una misura su [FRAMES] fotogrammi. Il risultato arriva sul thread principale (null = fallita). */
@@ -316,6 +450,7 @@ class MeasureController {
         profileActive.value = false
         locked.value = false
         live.value = null
+        shape.value = null
         synchronized(sync) {
             callback = null
             frames.clear()
