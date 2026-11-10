@@ -160,7 +160,7 @@ fun HomeScreen(store: Store, go: (Screen) -> Unit) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .ledGlow(24.dp)
+                    .reliefShadow(24.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Brush.linearGradient(listOf(Color(0xFF263242), Color(0xFF121A25))))
                     .border(1.dp, BevelBrush, RoundedCornerShape(24.dp))

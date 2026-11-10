@@ -193,6 +193,28 @@ fun Modifier.ledGlow(radius: Dp, color: Color = Cyan, strength: Float = 0.72f): 
     }
 }
 
+/** Ombra scura sotto un riquadro, per farlo sembrare in rilievo (senza luce). Va messo PRIMA di clip/background. */
+fun Modifier.reliefShadow(radius: Dp): Modifier = drawWithCache {
+    val soft = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = Color(0xD9000000).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(14.dp.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val tight = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = Color(0xCC000000).toArgb()
+        maskFilter = android.graphics.BlurMaskFilter(3.dp.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    val r = radius.toPx()
+    onDrawBehind {
+        drawIntoCanvas { c ->
+            val n = c.nativeCanvas
+            n.drawRoundRect(4.dp.toPx(), 10.dp.toPx(), size.width - 4.dp.toPx(), size.height + 12.dp.toPx(), r, r, soft)
+            n.drawRoundRect(1.dp.toPx(), 2.dp.toPx(), size.width - 1.dp.toPx(), size.height + 3.dp.toPx(), r, r, tight)
+        }
+    }
+}
+
 /** Modificatore "pannello": riquadro scuro in rilievo con luce LED sotto. */
 fun Modifier.panel(radius: Dp = 18.dp, glow: Color = Cyan): Modifier {
     val shape = RoundedCornerShape(radius)
